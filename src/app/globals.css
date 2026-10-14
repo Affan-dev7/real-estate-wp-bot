@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --font-family-base: var(--font-ibm-plex), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-family-urdu: "Noto Nastaliq Urdu", "Noto Sans Arabic", "Urdu Typesetting", Tahoma, sans-serif;
+  
+  --brand-green: #0E6B50;
+  --brand-green-hover: #0A4D3A;
+  --brand-green-subtle: #E6F4F0;
+  --brand-hot: #D9480F;
+  --brand-hot-subtle: #FDF2E9;
+  
+  --text-main: #1A202C;
+  --text-secondary: #5A6578;
+  --text-muted: #8792A2;
+  
+  --border-line: #E2E8F0;
+  --border-subtle: #EDF2F7;
+  
+  --bg-page: #F7FAFC;
+  --bg-surface: #FFFFFF;
+}
+
+@theme {
+  --color-brand-green: #0E6B50;
+  --color-brand-green-hover: #0A4D3A;
+  --color-brand-green-subtle: #E6F4F0;
+  --color-brand-hot: #D9480F;
+  --color-brand-hot-subtle: #FDF2E9;
+  
+  --color-text-main: #1A202C;
+  --color-text-secondary: #5A6578;
+  --color-text-muted: #8792A2;
+  
+  --color-border-line: #E2E8F0;
+  --color-border-subtle: #EDF2F7;
+  
+  --color-bg-page: #F7FAFC;
+  --color-bg-surface: #FFFFFF;
+}
+
+body {
+  font-family: var(--font-family-base);
+  color: var(--text-main);
+  background-color: var(--bg-page);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Tabular figures for numbers, prices, timestamps */
+.tabular-nums,
+[data-tabular="true"] {
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Urdu text support with native line-height */
+.font-urdu,
+[dir="rtl"],
+[dir="auto"]:lang(ur) {
+  font-family: var(--font-family-urdu), var(--font-family-base);
+  line-height: 1.8;
+}
+
+/* Touch targets: at least 44px */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Clean 1px separator lists as required */
+.row-item {
+  border-bottom: 1px solid var(--border-line);
+}
+.row-item:last-child {
+  border-bottom: none;
+}
+
+/* Accessible focus rings */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--brand-green);
+  outline-offset: 2px;
+}
