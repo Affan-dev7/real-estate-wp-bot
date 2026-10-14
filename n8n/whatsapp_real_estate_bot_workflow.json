@@ -1,5 +1,5 @@
 {
-  "name": "Pakistan Real Estate Agency WhatsApp AI Bot (Per-Agency Template)",
+  "name": "Pakistan Real Estate Agency WhatsApp AI Bot (Credential Manager)",
   "nodes": [
     {
       "parameters": {
@@ -33,19 +33,6 @@
         80
       ],
       "webhookId": "whatsapp-agency-get"
-    },
-    {
-      "parameters": {
-        "jsCode": "// =====================================================================\n// ⚙️ CONFIGURE THIS AGENCY'S CREDENTIALS & DETAILS BELOW:\n// (Double-click this node to edit your agency settings)\n// =====================================================================\n\nconst agencyConfig = {\n  // 1. Agency ID (from Supabase public.agencies table)\n  agencyId: \"00000000-0000-0000-0000-000000000001\",\n\n  // 2. Agency Name & Contact (used by AI in customer conversations)\n  agencyName: \"Al-Raziq Estate & Builders\",\n  agentPhone: \"+92 300 8251940\",\n  primaryCity: \"Karachi & Lahore\",\n\n  // 3. Supabase Credentials\n  supabaseUrl: \"https://YOUR_PROJECT_REF.supabase.co\",\n  supabaseServiceRoleKey: \"YOUR_SUPABASE_SERVICE_ROLE_KEY\",\n\n  // 4. Meta WhatsApp Cloud API Credentials\n  whatsappPhoneNumberId: \"YOUR_WHATSAPP_PHONE_NUMBER_ID\",\n  whatsappAccessToken: \"YOUR_WHATSAPP_PERMANENT_ACCESS_TOKEN\",\n\n  // 5. Secret verification token (entered in Meta Developers Webhook settings)\n  webhookVerifyToken: \"agency_verify_token_123\"\n};\n\n// Attach agency configuration directly to the incoming webhook payload\nconst webhookData = $input.first()?.json || {};\n\nreturn [{\n  json: {\n    ...webhookData,\n    agencyConfig\n  }\n}];"
-      },
-      "id": "node-agency-config",
-      "name": "⚙️ Agency & Bot Settings",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        460,
-        300
-      ]
     },
     {
       "parameters": {
@@ -84,7 +71,20 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst item = $input.first().json;\nconst body = item.body || item;\nconst config = item.agencyConfig || {};\n\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API payload structure validation\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming customer message (ignore delivery status receipts)\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 Pakistani standard format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from WhatsApp contact profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId: config.agencyId,\n    agencyName: config.agencyName,\n    agentPhone: config.agentPhone,\n    primaryCity: config.primaryCity,\n    supabaseUrl: config.supabaseUrl,\n    supabaseServiceRoleKey: config.supabaseServiceRoleKey,\n    whatsappPhoneNumberId: config.whatsappPhoneNumberId,\n    whatsappAccessToken: config.whatsappAccessToken\n  }\n}];"
+        "jsCode": "// =====================================================================\n// 🏢 AGENCY ROUTING & PROFILE (Non-Sensitive Agency Identifiers)\n// Credentials (Postgres, OpenAI, WhatsApp) live in n8n Credential Manager\n// =====================================================================\n\nconst agencyInfo = {\n  // Agency UUID from Supabase public.agencies table\n  agencyId: \"00000000-0000-0000-0000-000000000001\",\n  \n  // Agency Profile for customer greetings\n  agencyName: \"Al-Raziq Estate & Builders\",\n  agentPhone: \"+92 300 8251940\",\n  primaryCity: \"Karachi & Lahore\",\n  \n  // Meta Phone Number ID (from WhatsApp Business App Dashboard)\n  phoneNumberId: \"104928392019482\"\n};\n\nconst webhookData = $input.first()?.json || {};\n\nreturn [{\n  json: {\n    ...webhookData,\n    ...agencyInfo\n  }\n}];"
+      },
+      "id": "node-agency-info",
+      "name": "🏢 Agency Info & Routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst item = $input.first().json;\nconst body = item.body || item;\n\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API payload validation\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming customer message (ignore delivery receipts)\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 Pakistani standard format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from WhatsApp profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId: item.agencyId,\n    agencyName: item.agencyName,\n    agentPhone: item.agentPhone,\n    primaryCity: item.primaryCity,\n    phoneNumberId: item.phoneNumberId\n  }\n}];"
       },
       "id": "node-parse-whatsapp",
       "name": "Parse WhatsApp Payload",
@@ -117,48 +117,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "={{ $json.supabaseUrl }}/rest/v1/leads",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "phone",
-              "value": "=eq.{{ $json.senderPhone }}"
-            },
-            {
-              "name": "agency_id",
-              "value": "=eq.{{ $json.agencyId }}"
-            },
-            {
-              "name": "select",
-              "value": "*"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
-            }
-          ]
-        },
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM public.leads \nWHERE phone = '{{ $json.senderPhone }}' \n  AND agency_id = '{{ $json.agencyId }}' \nLIMIT 1;",
         "options": {}
       },
       "id": "node-lookup-lead",
-      "name": "Lookup Lead in Agency Leads",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Lookup Lead in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         1140,
         300
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -195,46 +171,28 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $json.supabaseUrl }}/rest/v1/leads",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Prefer",
-              "value": "return=representation"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"agency_id\": \"{{ $json.agencyId }}\",\n  \"name\": \"{{ $json.customerName }}\",\n  \"phone\": \"{{ $json.senderPhone }}\",\n  \"label\": \"cold\",\n  \"status\": \"new\",\n  \"bot_paused\": false,\n  \"first_message_at\": \"{{ $json.messageTimestamp }}\",\n  \"last_message_at\": \"{{ $json.messageTimestamp }}\"\n}",
+        "operation": "executeQuery",
+        "query": "=INSERT INTO public.leads (agency_id, name, phone, label, status, bot_paused, first_message_at, last_message_at)\nVALUES (\n  '{{ $json.agencyId }}',\n  '{{ $json.customerName.replace(/'/g, \"''\") }}',\n  '{{ $json.senderPhone }}',\n  'cold',\n  'new',\n  false,\n  now(),\n  now()\n)\nRETURNING *;",
         "options": {}
       },
       "id": "node-create-lead",
-      "name": "Create New Lead for Agency",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Create New Lead in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         1800,
         200
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "const parseData = $('Parse WhatsApp Payload').first().json;\nlet lead = null;\n\n// If newly created\nconst created = $input.first()?.json;\nif (created && (created.id || (Array.isArray(created) && created[0]?.id))) {\n  lead = Array.isArray(created) ? created[0] : created;\n} else {\n  lead = $('Process Lead Status').first().json.lead;\n}\n\n// Detect human takeover keywords across English, Roman Urdu & Urdu script\nconst text = (parseData.messageText || '').toLowerCase();\nconst humanKeywords = [\n  'human',\n  'agent',\n  'call me',\n  'call karein',\n  'call karo',\n  'phone',\n  'number dein',\n  'baat karni',\n  'rabta',\n  'live person',\n  'insan',\n  'banda',\n  'owner se',\n  'کال',\n  'ایجنٹ',\n  'بات کرنی'\n];\n\nconst requestedHuman = humanKeywords.some(kw => text.includes(kw));\n\nlet botState = 'active';\nif (lead.bot_paused) {\n  botState = 'paused_already';\n} else if (requestedHuman) {\n  botState = 'requesting_human';\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    lead,\n    leadId: lead.id,\n    botState,\n    requestedHuman\n  }\n}];"
+        "jsCode": "const parseData = $('Parse WhatsApp Payload').first().json;\nlet lead = null;\n\n// If newly created\nconst created = $input.first()?.json;\nif (created && (created.id || (Array.isArray(created) && created[0]?.id))) {\n  lead = Array.isArray(created) ? created[0] : created;\n} else {\n  lead = $('Process Lead Status').first().json.lead;\n}\n\n// Detect human takeover triggers in English, Roman Urdu & Urdu script\nconst text = (parseData.messageText || '').toLowerCase();\nconst humanKeywords = [\n  'human',\n  'agent',\n  'call me',\n  'call karein',\n  'call karo',\n  'phone',\n  'number dein',\n  'baat karni',\n  'rabta',\n  'live person',\n  'insan',\n  'banda',\n  'owner se',\n  'کال',\n  'ایجنٹ',\n  'بات کرنی'\n];\n\nconst requestedHuman = humanKeywords.some(kw => text.includes(kw));\n\nlet botState = 'active';\nif (lead.bot_paused) {\n  botState = 'paused_already';\n} else if (requestedHuman) {\n  botState = 'requesting_human';\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    lead,\n    leadId: lead.id,\n    botState,\n    requestedHuman\n  }\n}];"
       },
       "id": "node-analyze-handoff",
       "name": "Analyze Human Handoff & Bot State",
@@ -247,38 +205,24 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $json.supabaseUrl }}/rest/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"agency_id\": \"{{ $json.agencyId }}\",\n  \"lead_id\": \"{{ $json.leadId }}\",\n  \"direction\": \"in\",\n  \"sender\": \"customer\",\n  \"body\": \"{{ $json.messageText.replace(/\"/g, '\\\\\"') }}\",\n  \"media_type\": \"text\",\n  \"delivery_status\": \"delivered\",\n  \"created_at\": \"{{ $json.messageTimestamp }}\"\n}",
+        "operation": "executeQuery",
+        "query": "=INSERT INTO public.messages (agency_id, lead_id, direction, sender, body, media_type, delivery_status, created_at)\nVALUES (\n  '{{ $json.agencyId }}',\n  '{{ $json.leadId }}',\n  'in',\n  'customer',\n  '{{ $json.messageText.replace(/'/g, \"''\") }}',\n  'text',\n  'delivered',\n  now()\n);",
         "options": {}
       },
       "id": "node-log-inbound-msg",
-      "name": "Log Customer Message in Supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Log Customer Message in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         2240,
         300
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -328,59 +272,34 @@
     },
     {
       "parameters": {
-        "method": "PATCH",
-        "url": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseUrl }}/rest/v1/leads",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "id",
-              "value": "=eq.{{ $('Analyze Human Handoff & Bot State').first().json.leadId }}"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"bot_paused\": true,\n  \"label\": \"hot\",\n  \"last_message_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "operation": "executeQuery",
+        "query": "=UPDATE public.leads \nSET bot_paused = true, \n    label = 'hot', \n    last_message_at = now()\nWHERE id = '{{ $('Analyze Human Handoff & Bot State').first().json.leadId }}';",
         "options": {}
       },
       "id": "node-pause-lead-bot",
-      "name": "Pause Bot (Mark Human Needed)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Pause Bot on Lead in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         2700,
         260
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $('Analyze Human Handoff & Bot State').first().json.whatsappPhoneNumberId }}/messages",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Analyze Human Handoff & Bot State').first().json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.whatsappAccessToken }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -399,91 +318,55 @@
       "position": [
         2940,
         260
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-cloud-api-token",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseUrl }}/rest/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"agency_id\": \"{{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}\",\n  \"lead_id\": \"{{ $('Analyze Human Handoff & Bot State').first().json.leadId }}\",\n  \"direction\": \"out\",\n  \"sender\": \"bot\",\n  \"body\": \"Bohat shukriya! Humne bot pause kardiya hai aur hamare senior consultant ko notify kardiya hai. Agent jald rabta karein gay.\",\n  \"media_type\": \"text\",\n  \"delivery_status\": \"delivered\"\n}",
+        "operation": "executeQuery",
+        "query": "=INSERT INTO public.messages (agency_id, lead_id, direction, sender, body, media_type, delivery_status, created_at)\nVALUES (\n  '{{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}',\n  '{{ $('Analyze Human Handoff & Bot State').first().json.leadId }}',\n  'out',\n  'bot',\n  'Bohat shukriya! Humne bot pause kardiya hai aur hamare senior consultant ko notify kardiya hai. Agent jald rabta karein gay.',\n  'text',\n  'delivered',\n  now()\n);",
         "options": {}
       },
       "id": "node-log-handover-msg",
-      "name": "Log Handover Message in Supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Log Handover Message in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         3180,
         260
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseUrl }}/rest/v1/listings",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "agency_id",
-              "value": "=eq.{{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}"
-            },
-            {
-              "name": "visible_to_bot",
-              "value": "=eq.true"
-            },
-            {
-              "name": "status",
-              "value": "=eq.available"
-            },
-            {
-              "name": "select",
-              "value": "id,title,type,buy_or_rent,area,city,size_value,size_unit,bedrooms,bathrooms,price_pkr,description,features,photo_urls,video_urls"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
-            }
-          ]
-        },
+        "operation": "executeQuery",
+        "query": "=SELECT id, title, type, buy_or_rent, area, city, size_value, size_unit, bedrooms, bathrooms, price_pkr, description, features, photo_urls, video_urls \nFROM public.listings \nWHERE agency_id = '{{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}' \n  AND visible_to_bot = true \n  AND status = 'available';",
         "options": {}
       },
       "id": "node-fetch-bot-listings",
-      "name": "Fetch Agency Bot Listings",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Fetch Agency Bot Listings in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         2700,
         480
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -537,59 +420,34 @@
     },
     {
       "parameters": {
-        "method": "PATCH",
-        "url": "={{ $json.supabaseUrl }}/rest/v1/leads",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "id",
-              "value": "=eq.{{ $json.leadId }}"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"wants_type\": {{ $json.extractedLead.wants_type ? '\"' + $json.extractedLead.wants_type + '\"' : 'null' }},\n  \"wants_area\": {{ $json.extractedLead.wants_area ? '\"' + $json.extractedLead.wants_area + '\"' : 'null' }},\n  \"budget_max_pkr\": {{ $json.extractedLead.budget_max_pkr || 'null' }},\n  \"wants_size\": {{ $json.extractedLead.wants_size ? '\"' + $json.extractedLead.wants_size + '\"' : 'null' }},\n  \"buy_or_rent\": {{ $json.extractedLead.buy_or_rent ? '\"' + $json.extractedLead.buy_or_rent + '\"' : '\"buy\"' }},\n  \"label\": \"{{ $json.extractedLead.label || 'cold' }}\",\n  \"last_message_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "operation": "executeQuery",
+        "query": "=UPDATE public.leads\nSET \n  wants_type = COALESCE({{ $json.extractedLead.wants_type ? \"'\" + $json.extractedLead.wants_type + \"'\" : \"NULL\" }}, wants_type),\n  wants_area = COALESCE({{ $json.extractedLead.wants_area ? \"'\" + $json.extractedLead.wants_area.replace(/'/g, \"''\") + \"'\" : \"NULL\" }}, wants_area),\n  budget_max_pkr = COALESCE({{ $json.extractedLead.budget_max_pkr || \"NULL\" }}, budget_max_pkr),\n  wants_size = COALESCE({{ $json.extractedLead.wants_size ? \"'\" + $json.extractedLead.wants_size.replace(/'/g, \"''\") + \"'\" : \"NULL\" }}, wants_size),\n  buy_or_rent = COALESCE({{ $json.extractedLead.buy_or_rent ? \"'\" + $json.extractedLead.buy_or_rent + \"'\" : \"NULL\" }}, buy_or_rent),\n  label = CASE WHEN '{{ $json.extractedLead.label || \"cold\" }}' = 'hot' THEN 'hot' ELSE label END,\n  last_message_at = now()\nWHERE id = '{{ $json.leadId }}';",
         "options": {}
       },
       "id": "node-update-lead-ai",
-      "name": "Update Lead with Extracted Info",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Update Lead with Extracted Info in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         3420,
         480
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $('Parse AI Output & Extract Data').first().json.whatsappPhoneNumberId }}/messages",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Parse AI Output & Extract Data').first().json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Parse AI Output & Extract Data').first().json.whatsappAccessToken }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -608,42 +466,34 @@
       "position": [
         3660,
         480
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-cloud-api-token",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Parse AI Output & Extract Data').first().json.supabaseUrl }}/rest/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $('Parse AI Output & Extract Data').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Parse AI Output & Extract Data').first().json.supabaseServiceRoleKey }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"agency_id\": \"{{ $('Parse AI Output & Extract Data').first().json.agencyId }}\",\n  \"lead_id\": \"{{ $('Parse AI Output & Extract Data').first().json.leadId }}\",\n  \"direction\": \"out\",\n  \"sender\": \"bot\",\n  \"body\": \"{{ $('Parse AI Output & Extract Data').first().json.aiReply.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n') }}\",\n  \"listing_id\": {{ $('Parse AI Output & Extract Data').first().json.recommendedListingId ? '\"' + $('Parse AI Output & Extract Data').first().json.recommendedListingId + '\"' : 'null' }},\n  \"media_type\": \"text\",\n  \"delivery_status\": \"delivered\"\n}",
+        "operation": "executeQuery",
+        "query": "=INSERT INTO public.messages (agency_id, lead_id, direction, sender, body, listing_id, media_type, delivery_status, created_at)\nVALUES (\n  '{{ $('Parse AI Output & Extract Data').first().json.agencyId }}',\n  '{{ $('Parse AI Output & Extract Data').first().json.leadId }}',\n  'out',\n  'bot',\n  '{{ $('Parse AI Output & Extract Data').first().json.aiReply.replace(/'/g, \"''\") }}',\n  {{ $('Parse AI Output & Extract Data').first().json.recommendedListingId ? \"'\" + $('Parse AI Output & Extract Data').first().json.recommendedListingId + \"'\" : \"NULL\" }},\n  'text',\n  'delivered',\n  now()\n);",
         "options": {}
       },
       "id": "node-log-ai-msg",
-      "name": "Log Outbound Bot Message in Supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Log Outbound Bot Message in Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         3900,
         480
-      ]
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase Postgres"
+        }
+      }
     }
   ],
   "connections": {
@@ -651,14 +501,14 @@
       "main": [
         [
           {
-            "node": "⚙️ Agency & Bot Settings",
+            "node": "🏢 Agency Info & Routing",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "⚙️ Agency & Bot Settings": {
+    "🏢 Agency Info & Routing": {
       "main": [
         [
           {
@@ -706,14 +556,14 @@
       "main": [
         [
           {
-            "node": "Lookup Lead in Agency Leads",
+            "node": "Lookup Lead in Postgres",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lookup Lead in Agency Leads": {
+    "Lookup Lead in Postgres": {
       "main": [
         [
           {
@@ -739,7 +589,7 @@
       "main": [
         [
           {
-            "node": "Create New Lead for Agency",
+            "node": "Create New Lead in Postgres",
             "type": "main",
             "index": 0
           }
@@ -753,7 +603,7 @@
         ]
       ]
     },
-    "Create New Lead for Agency": {
+    "Create New Lead in Postgres": {
       "main": [
         [
           {
@@ -768,14 +618,14 @@
       "main": [
         [
           {
-            "node": "Log Customer Message in Supabase",
+            "node": "Log Customer Message in Postgres",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Customer Message in Supabase": {
+    "Log Customer Message in Postgres": {
       "main": [
         [
           {
@@ -791,21 +641,21 @@
         [],
         [
           {
-            "node": "Pause Bot (Mark Human Needed)",
+            "node": "Pause Bot on Lead in Postgres",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Fetch Agency Bot Listings",
+            "node": "Fetch Agency Bot Listings in Postgres",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pause Bot (Mark Human Needed)": {
+    "Pause Bot on Lead in Postgres": {
       "main": [
         [
           {
@@ -820,14 +670,14 @@
       "main": [
         [
           {
-            "node": "Log Handover Message in Supabase",
+            "node": "Log Handover Message in Postgres",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Agency Bot Listings": {
+    "Fetch Agency Bot Listings in Postgres": {
       "main": [
         [
           {
@@ -853,14 +703,14 @@
       "main": [
         [
           {
-            "node": "Update Lead with Extracted Info",
+            "node": "Update Lead with Extracted Info in Postgres",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Lead with Extracted Info": {
+    "Update Lead with Extracted Info in Postgres": {
       "main": [
         [
           {
@@ -875,7 +725,7 @@
       "main": [
         [
           {
-            "node": "Log Outbound Bot Message in Supabase",
+            "node": "Log Outbound Bot Message in Postgres",
             "type": "main",
             "index": 0
           }
