@@ -23,9 +23,14 @@ function LeadsContent() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [labelFilter, setLabelFilter] = useState<'all' | 'hot' | 'need_human'>('all');
 
-  const reloadLeads = () => {
+  const reloadLeads = async () => {
+    // 1. Instantly display cached/current leads
     const list = DataStore.getLeads();
     setLeads([...list]);
+
+    // 2. Sync fresh live leads from Supabase in background
+    const live = await DataStore.syncFromSupabase();
+    setLeads([...live]);
   };
 
   useEffect(() => {

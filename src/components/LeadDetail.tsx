@@ -37,18 +37,23 @@ export default function LeadDetail({ leadId, onClose, onUpdate }: LeadDetailProp
   const [notesSaved, setNotesSaved] = useState(false);
   const [agentInput, setAgentInput] = useState('');
 
-  const reloadData = () => {
+  const reloadData = async () => {
     const l = DataStore.getLeadById(leadId);
     if (l) {
       setLead({ ...l });
       setNotes(l.notes || '');
 
+      // Load cached messages first
       const msgs = DataStore.getMessages(leadId);
       setMessages(msgs);
 
+      // Fetch live messages from Supabase
+      const liveMsgs = await DataStore.syncMessagesFromSupabase(leadId);
+      setMessages(liveMsgs);
+
       // Collect sent listings
       const listingIds = Array.from(
-        new Set(msgs.map((m) => m.listing_id).filter((id): id is string => Boolean(id)))
+        new Set(liveMsgs.map((m) => m.listing_id).filter((id): id is string => Boolean(id)))
       );
       const listings = listingIds
         .map((id) => DataStore.getListingById(id))

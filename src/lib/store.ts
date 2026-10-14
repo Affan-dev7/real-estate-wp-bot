@@ -197,6 +197,41 @@ export class DataStore {
     return list;
   }
 
+  static async syncFromSupabase(): Promise<Lead[]> {
+    if (typeof window === 'undefined') return this.getLeads();
+    try {
+      const res = await fetch('/api/leads');
+      if (res.ok) {
+        const liveLeads = await res.json();
+        if (Array.isArray(liveLeads) && liveLeads.length > 0) {
+          const formatted: Lead[] = liveLeads.map((l: any) => ({
+            id: l.id,
+            agency_id: l.agency_id,
+            name: l.name || 'WhatsApp Customer',
+            phone: l.phone,
+            wants_type: l.wants_type || undefined,
+            wants_area: l.wants_area || undefined,
+            wants_size: l.wants_size || undefined,
+            budget_max_pkr: l.budget_max_pkr || undefined,
+            buy_or_rent: l.buy_or_rent || 'buy',
+            label: l.label || 'cold',
+            status: l.status || 'new',
+            notes: l.notes || '',
+            bot_paused: Boolean(l.bot_paused),
+            first_message_at: l.first_message_at || l.created_at || new Date().toISOString(),
+            last_message_at: l.last_message_at || l.created_at || new Date().toISOString(),
+          }));
+
+          setLocalStorageItem(STORAGE_KEYS.LEADS, formatted);
+          return formatted;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not sync leads from Supabase API', e);
+    }
+    return this.getLeads();
+  }
+
   static getLeadById(id: string): Lead | undefined {
     return this.getLeads().find((l) => l.id === id);
   }
@@ -226,6 +261,14 @@ export class DataStore {
       lead.bot_paused = paused;
       setLocalStorageItem(STORAGE_KEYS.LEADS, list);
     }
+    // Also patch Supabase in background
+    if (typeof window !== 'undefined') {
+      fetch('/api/leads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, bot_paused: paused }),
+      }).catch(console.warn);
+    }
   }
 
   static updateLeadNotes(id: string, notes: string): void {
@@ -234,6 +277,13 @@ export class DataStore {
     if (lead) {
       lead.notes = notes;
       setLocalStorageItem(STORAGE_KEYS.LEADS, list);
+    }
+    if (typeof window !== 'undefined') {
+      fetch('/api/leads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, notes }),
+      }).catch(console.warn);
     }
   }
 
@@ -244,6 +294,26 @@ export class DataStore {
       return all.filter((m) => m.lead_id === leadId).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     }
     return all;
+  }
+
+  static async syncMessagesFromSupabase(leadId: string): Promise<Message[]> {
+    if (typeof window === 'undefined') return this.getMessages(leadId);
+    try {
+      const res = await fetch(`/api/messages?lead_id=${leadId}`);
+      if (res.ok) {
+        const liveMsgs = await res.json();
+        if (Array.isArray(liveMsgs) && liveMsgs.length > 0) {
+          const all = getLocalStorageItem<Message[]>(STORAGE_KEYS.MESSAGES, MOCK_MESSAGES);
+          const others = all.filter((m) => m.lead_id !== leadId);
+          const combined = [...others, ...liveMsgs];
+          setLocalStorageItem(STORAGE_KEYS.MESSAGES, combined);
+          return liveMsgs;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not sync messages from Supabase', e);
+    }
+    return this.getMessages(leadId);
   }
 
   static addMessage(message: Omit<Message, 'id' | 'created_at'>): Message {
