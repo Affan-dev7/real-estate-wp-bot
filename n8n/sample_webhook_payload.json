@@ -1,0 +1,39 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "100293848593021",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "923008251940",
+              "phone_number_id": "104928392019482"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Muhammad Tariq Khan"
+                },
+                "wa_id": "923008219401"
+              }
+            ],
+            "messages": [
+              {
+                "from": "923008219401",
+                "id": "wamid.HBgMOTIzMDA4MjE5NDAxFQIAEhgUM0FBQzQ3RjY1MDIwMzIxQzM5RDAA",
+                "timestamp": "1728905400",
+                "text": {
+                  "body": "Assalam o alaikum! DHA Phase 6 mein koi 10 marla brand new house available hai? Around 5 crore budget."
+                },
+                "type": "text"
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
