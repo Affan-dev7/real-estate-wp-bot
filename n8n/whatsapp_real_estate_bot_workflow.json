@@ -1,10 +1,63 @@
 {
-  "name": "Pakistan Real Estate WhatsApp AI Bot (Supabase + n8n)",
+  "name": "Pakistan Real Estate Agency WhatsApp AI Bot (Per-Agency Template)",
   "nodes": [
     {
       "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "agencyId",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "agencyName",
+              "value": "Al-Raziq Estate & Builders"
+            },
+            {
+              "name": "agentPhone",
+              "value": "+92 300 8251940"
+            },
+            {
+              "name": "primaryCity",
+              "value": "Karachi & Lahore"
+            },
+            {
+              "name": "supabaseUrl",
+              "value": "https://YOUR_PROJECT_REF.supabase.co"
+            },
+            {
+              "name": "supabaseServiceRoleKey",
+              "value": "YOUR_SUPABASE_SERVICE_ROLE_KEY"
+            },
+            {
+              "name": "whatsappPhoneNumberId",
+              "value": "YOUR_WHATSAPP_PHONE_NUMBER_ID"
+            },
+            {
+              "name": "whatsappAccessToken",
+              "value": "YOUR_WHATSAPP_PERMANENT_ACCESS_TOKEN"
+            },
+            {
+              "name": "webhookVerifyToken",
+              "value": "agency_verify_token_123"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-agency-config",
+      "name": "⚙️ Agency & Bot Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        200
+      ]
+    },
+    {
+      "parameters": {
         "httpMethod": "POST",
-        "path": "whatsapp",
+        "path": "whatsapp-agency-1",
         "options": {}
       },
       "id": "node-webhook-post",
@@ -12,15 +65,15 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        220,
-        300
+        420,
+        320
       ],
-      "webhookId": "whatsapp-real-estate-webhook"
+      "webhookId": "whatsapp-real-estate-post"
     },
     {
       "parameters": {
         "httpMethod": "GET",
-        "path": "whatsapp",
+        "path": "whatsapp-agency-1",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -29,10 +82,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        220,
-        100
+        420,
+        80
       ],
-      "webhookId": "whatsapp-real-estate-verify"
+      "webhookId": "whatsapp-real-estate-get"
     },
     {
       "parameters": {
@@ -50,8 +103,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        460,
-        100
+        640,
+        80
       ]
     },
     {
@@ -65,21 +118,21 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        700,
-        100
+        860,
+        80
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst body = $input.first().json.body || $input.first().json;\n\n// Defaults\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API standard structure\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming message rather than status update\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from contacts profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\n// Agency ID from environment or default seed agency\nconst agencyId = $env.AGENCY_ID || '00000000-0000-0000-0000-000000000001';\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId,\n    rawPayload: body\n  }\n}];"
+        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst body = $input.first().json.body || $input.first().json;\nconst config = $('⚙️ Agency & Bot Settings').first().json;\n\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API payload validation\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming message rather than a delivery receipt\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 Pakistani standard format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from WhatsApp contact profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId: config.agencyId,\n    agencyName: config.agencyName,\n    agentPhone: config.agentPhone,\n    primaryCity: config.primaryCity,\n    supabaseUrl: config.supabaseUrl,\n    supabaseServiceRoleKey: config.supabaseServiceRoleKey,\n    whatsappPhoneNumberId: config.whatsappPhoneNumberId,\n    whatsappAccessToken: config.whatsappAccessToken\n  }\n}];"
       },
       "id": "node-parse-whatsapp",
       "name": "Parse WhatsApp Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
-        300
+        640,
+        320
       ]
     },
     {
@@ -98,14 +151,14 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        700,
-        300
+        860,
+        320
       ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "url": "={{ $json.supabaseUrl }}/rest/v1/leads",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -128,23 +181,23 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
             }
           ]
         },
         "options": {}
       },
       "id": "node-lookup-lead",
-      "name": "Lookup Lead in Supabase",
+      "name": "Lookup Lead in Agency Leads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        940,
-        300
+        1080,
+        320
       ]
     },
     {
@@ -156,8 +209,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1180,
-        300
+        1300,
+        320
       ]
     },
     {
@@ -176,24 +229,24 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1420,
-        300
+        1520,
+        320
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "url": "={{ $json.supabaseUrl }}/rest/v1/leads",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Content-Type",
@@ -211,41 +264,41 @@
         "options": {}
       },
       "id": "node-create-lead",
-      "name": "Create New Lead in Supabase",
+      "name": "Create New Lead for Agency",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1660,
-        200
+        1740,
+        220
       ]
     },
     {
       "parameters": {
-        "jsCode": "const parseData = $('Parse WhatsApp Payload').first().json;\nlet lead = null;\n\n// If newly created\nconst created = $input.first()?.json;\nif (created && (created.id || (Array.isArray(created) && created[0]?.id))) {\n  lead = Array.isArray(created) ? created[0] : created;\n} else {\n  lead = $('Process Lead Status').first().json.lead;\n}\n\n// Human handoff keyword check in English, Roman Urdu & Urdu script\nconst text = (parseData.messageText || '').toLowerCase();\nconst humanKeywords = [\n  'human',\n  'agent',\n  'call me',\n  'call karein',\n  'call karo',\n  'phone',\n  'number dein',\n  'baat karni',\n  'rabta',\n  'live person',\n  'insan',\n  'banda',\n  'owner se',\n  'کال',\n  'ایجنٹ',\n  'بات کرنی'\n];\n\nconst requestedHuman = humanKeywords.some(kw => text.includes(kw));\n\nlet botState = 'active';\nif (lead.bot_paused) {\n  botState = 'paused_already';\n} else if (requestedHuman) {\n  botState = 'requesting_human';\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    lead,\n    leadId: lead.id,\n    botState,\n    requestedHuman\n  }\n}];"
+        "jsCode": "const parseData = $('Parse WhatsApp Payload').first().json;\nlet lead = null;\n\n// If newly created\nconst created = $input.first()?.json;\nif (created && (created.id || (Array.isArray(created) && created[0]?.id))) {\n  lead = Array.isArray(created) ? created[0] : created;\n} else {\n  lead = $('Process Lead Status').first().json.lead;\n}\n\n// Detect human takeover keywords across English, Roman Urdu & Urdu script\nconst text = (parseData.messageText || '').toLowerCase();\nconst humanKeywords = [\n  'human',\n  'agent',\n  'call me',\n  'call karein',\n  'call karo',\n  'phone',\n  'number dein',\n  'baat karni',\n  'rabta',\n  'live person',\n  'insan',\n  'banda',\n  'owner se',\n  'کال',\n  'ایجنٹ',\n  'بات کرنی'\n];\n\nconst requestedHuman = humanKeywords.some(kw => text.includes(kw));\n\nlet botState = 'active';\nif (lead.bot_paused) {\n  botState = 'paused_already';\n} else if (requestedHuman) {\n  botState = 'requesting_human';\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    lead,\n    leadId: lead.id,\n    botState,\n    requestedHuman\n  }\n}];"
       },
       "id": "node-analyze-handoff",
       "name": "Analyze Human Handoff & Bot State",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1900,
-        300
+        1960,
+        320
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/messages",
+        "url": "={{ $json.supabaseUrl }}/rest/v1/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Content-Type",
@@ -259,12 +312,12 @@
         "options": {}
       },
       "id": "node-log-inbound-msg",
-      "name": "Log Inbound Customer Message",
+      "name": "Log Customer Message in Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2140,
-        300
+        2180,
+        320
       ]
     },
     {
@@ -309,14 +362,14 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        2380,
-        300
+        2400,
+        320
       ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "url": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseUrl }}/rest/v1/leads",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -331,11 +384,11 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Content-Type",
@@ -349,24 +402,24 @@
         "options": {}
       },
       "id": "node-pause-lead-bot",
-      "name": "Pause Bot on Lead (Human Needed)",
+      "name": "Pause Bot (Mark Human Needed)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2640,
-        280
+        2660,
+        300
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Analyze Human Handoff & Bot State').first().json.whatsappPhoneNumberId }}/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}"
+              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.whatsappAccessToken }}"
             },
             {
               "name": "Content-Type",
@@ -376,7 +429,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $('Analyze Human Handoff & Bot State').first().json.senderPhone.replace('+', '') }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"preview_url\": false,\n    \"body\": \"Bohat shukriya {{ $('Analyze Human Handoff & Bot State').first().json.customerName }} sb! Humne automated bot pause kardiya hai aur hamare senior property agent ko notify kardiya hai. Agent jald hi aapko isi number pe rabta karein gay. JazakAllah!\"\n  }\n}",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $('Analyze Human Handoff & Bot State').first().json.senderPhone.replace('+', '') }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"preview_url\": false,\n    \"body\": \"Bohat shukriya {{ $('Analyze Human Handoff & Bot State').first().json.customerName }} sb! Humne bot pause kardiya hai aur {{ $('Analyze Human Handoff & Bot State').first().json.agencyName }} ke senior consultant ko alert bhej diya hai. Hamari team jald hi aapko isi number pe call ya WhatsApp karegi. JazakAllah!\"\n  }\n}",
         "options": {}
       },
       "id": "node-send-handover-wa",
@@ -384,24 +437,24 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2880,
-        280
+        2900,
+        300
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/messages",
+        "url": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseUrl }}/rest/v1/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Content-Type",
@@ -411,7 +464,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"agency_id\": \"{{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}\",\n  \"lead_id\": \"{{ $('Analyze Human Handoff & Bot State').first().json.leadId }}\",\n  \"direction\": \"out\",\n  \"sender\": \"bot\",\n  \"body\": \"Bohat shukriya! Humne automated bot pause kardiya hai aur hamare senior property agent ko notify kardiya hai. Agent jald hi aapko isi number pe rabta karein gay.\",\n  \"media_type\": \"text\",\n  \"delivery_status\": \"delivered\"\n}",
+        "jsonBody": "={\n  \"agency_id\": \"{{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}\",\n  \"lead_id\": \"{{ $('Analyze Human Handoff & Bot State').first().json.leadId }}\",\n  \"direction\": \"out\",\n  \"sender\": \"bot\",\n  \"body\": \"Bohat shukriya! Humne bot pause kardiya hai aur hamare senior consultant ko notify kardiya hai. Agent jald rabta karein gay.\",\n  \"media_type\": \"text\",\n  \"delivery_status\": \"delivered\"\n}",
         "options": {}
       },
       "id": "node-log-handover-msg",
@@ -419,14 +472,14 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3120,
-        280
+        3140,
+        300
       ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/listings",
+        "url": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseUrl }}/rest/v1/listings",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -453,23 +506,23 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $('Analyze Human Handoff & Bot State').first().json.supabaseServiceRoleKey }}"
             }
           ]
         },
         "options": {}
       },
       "id": "node-fetch-bot-listings",
-      "name": "Fetch Bot Available Listings",
+      "name": "Fetch Agency Bot Listings",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2640,
-        500
+        2660,
+        520
       ]
     },
     {
@@ -479,11 +532,11 @@
           "values": [
             {
               "role": "system",
-              "content": "=You are an expert Pakistani Real Estate Consultant AI for an agency. You speak warm, polite Roman Urdu and English (with natural Pakistani real estate terminology: Marla, Kanal, Sq Yd/Gaz, Lakh, Crore, DHA, Clifton, Bahria, etc.).\n\nYOUR GOAL:\n1. Greet the customer respectfully ('Assalam o alaikum [Name] sb / madam').\n2. Answer their question based on our available listings inventory below.\n3. If they inquire about a property, recommend 1 or 2 best matching options from the listings, specifying Title, Location, Size, Asking Price (in Lakh or Crore), and features.\n4. If an Instagram video tour link is available, share it nicely.\n5. Ask an engaging follow-up question (e.g. 'Would you like to schedule a site visit this week or see more options?').\n6. Extract customer requirements and return STRICT JSON with two keys: 'reply_text' (your message to customer) and 'extracted_lead' (structured metadata).\n\nFORMAT REQUIREMENTS:\nReturn ONLY a valid JSON object in this exact shape:\n{\n  \"reply_text\": \"Assalam o alaikum Tariq sb! ...\",\n  \"recommended_listing_id\": \"UUID-of-recommended-listing-or-null\",\n  \"extracted_lead\": {\n    \"wants_type\": \"house\" | \"flat\" | \"plot\" | \"commercial\" | null,\n    \"wants_area\": \"DHA Phase 6\" | null,\n    \"budget_max_pkr\": 50000000 | null,\n    \"wants_size\": \"10 marla\" | null,\n    \"buy_or_rent\": \"buy\" | \"rent\" | null,\n    \"label\": \"hot\" | \"cold\"\n  }\n}\n\nMark 'hot' if they have a specific budget, are ready to buy, or asking for immediate visits.\n\nAVAILABLE AGENCY LISTINGS INVENTORY:\n{{ JSON.stringify($input.all().map(i => i.json)) }}"
+              "content": "=You are the primary WhatsApp Real Estate Consultant AI for {{ $('Analyze Human Handoff & Bot State').first().json.agencyName }} operating in {{ $('Analyze Human Handoff & Bot State').first().json.primaryCity }}. You speak warm, polite Roman Urdu and English.\n\nYOUR GOAL:\n1. Greet the customer respectfully ('Assalam o alaikum [Name] sb / madam').\n2. Answer their inquiry accurately using ONLY our agency's available property inventory provided below.\n3. Recommend 1 or 2 matching properties, highlighting Title, Location, Size (Marla/Kanal/Sq Yd), Asking Price in Lakh or Crore, and key amenities.\n4. If an Instagram video tour link is present, share it nicely so they can watch the property tour.\n5. Ask an engaging closing question (e.g., 'Would you like us to schedule a site visit this week or check other sectors?').\n6. Extract customer preferences into structured metadata.\n\nSTRICT JSON OUTPUT FORMAT:\nReturn ONLY a valid JSON object:\n{\n  \"reply_text\": \"Assalam o alaikum Tariq sb! ...\",\n  \"recommended_listing_id\": \"UUID-or-null\",\n  \"extracted_lead\": {\n    \"wants_type\": \"house\" | \"flat\" | \"plot\" | \"commercial\" | null,\n    \"wants_area\": \"DHA Phase 6\" | null,\n    \"budget_max_pkr\": 50000000 | null,\n    \"wants_size\": \"10 marla\" | null,\n    \"buy_or_rent\": \"buy\" | \"rent\" | null,\n    \"label\": \"hot\" | \"cold\"\n  }\n}\n\nMark label as 'hot' if they have a clear budget, urgent buying timeline, or requested a visit.\n\nAVAILABLE AGENCY INVENTORY:\n{{ JSON.stringify($input.all().map(i => i.json)) }}"
             },
             {
               "role": "user",
-              "content": "=Customer Name: {{ $('Analyze Human Handoff & Bot State').first().json.customerName }}\nCustomer Phone: {{ $('Analyze Human Handoff & Bot State').first().json.senderPhone }}\nMessage: {{ $('Analyze Human Handoff & Bot State').first().json.messageText }}"
+              "content": "=Customer Name: {{ $('Analyze Human Handoff & Bot State').first().json.customerName }}\nCustomer Phone: {{ $('Analyze Human Handoff & Bot State').first().json.senderPhone }}\nCustomer Inquiry: {{ $('Analyze Human Handoff & Bot State').first().json.messageText }}"
             }
           ]
         },
@@ -495,12 +548,12 @@
         }
       },
       "id": "node-openai-chat",
-      "name": "AI Real Estate Agent (OpenAI)",
+      "name": "Agency AI Real Estate Agent (OpenAI)",
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1.4,
       "position": [
-        2880,
-        500
+        2900,
+        520
       ],
       "credentials": {
         "openAiApi": {
@@ -511,21 +564,21 @@
     },
     {
       "parameters": {
-        "jsCode": "const aiRaw = $input.first().json.message.content || $input.first().json.text || '{}';\nlet aiData = {};\ntry {\n  aiData = JSON.parse(aiRaw);\n} catch (e) {\n  aiData = {\n    reply_text: 'Assalam o alaikum! Shukriya rabta karne ka. Hamare pas DHA, Clifton aur Bahria mein premium options available hain. Aap ka budget aur required size kya hai?',\n    recommended_listing_id: null,\n    extracted_lead: {}\n  };\n}\n\nconst handoverData = $('Analyze Human Handoff & Bot State').first().json;\n\nreturn [{\n  json: {\n    ...handoverData,\n    aiReply: aiData.reply_text || 'Assalam o alaikum! How can we assist you with property today?',\n    recommendedListingId: aiData.recommended_listing_id || null,\n    extractedLead: aiData.extracted_lead || {}\n  }\n}];"
+        "jsCode": "const aiRaw = $input.first().json.message.content || $input.first().json.text || '{}';\nlet aiData = {};\ntry {\n  aiData = JSON.parse(aiRaw);\n} catch (e) {\n  aiData = {\n    reply_text: 'Assalam o alaikum! Shukriya rabta karne ka. Hamare pas premium options available hain. Aap ka budget aur required size kya hai?',\n    recommended_listing_id: null,\n    extracted_lead: {}\n  };\n}\n\nconst handoverData = $('Analyze Human Handoff & Bot State').first().json;\n\nreturn [{\n  json: {\n    ...handoverData,\n    aiReply: aiData.reply_text || 'Assalam o alaikum! How can we assist you with property today?',\n    recommendedListingId: aiData.recommended_listing_id || null,\n    extractedLead: aiData.extracted_lead || {}\n  }\n}];"
       },
       "id": "node-parse-ai-output",
       "name": "Parse AI Output & Extract Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3120,
-        500
+        3140,
+        520
       ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "url": "={{ $json.supabaseUrl }}/rest/v1/leads",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -540,11 +593,11 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Content-Type",
@@ -562,20 +615,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3360,
-        500
+        3380,
+        520
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Parse AI Output & Extract Data').first().json.whatsappPhoneNumberId }}/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}"
+              "value": "=Bearer {{ $('Parse AI Output & Extract Data').first().json.whatsappAccessToken }}"
             },
             {
               "name": "Content-Type",
@@ -589,28 +642,28 @@
         "options": {}
       },
       "id": "node-send-ai-wa",
-      "name": "Send AI Reply via WhatsApp API",
+      "name": "Send AI Reply via Agency WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3600,
-        500
+        3620,
+        520
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/messages",
+        "url": "={{ $('Parse AI Output & Extract Data').first().json.supabaseUrl }}/rest/v1/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "={{ $('Parse AI Output & Extract Data').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "value": "=Bearer {{ $('Parse AI Output & Extract Data').first().json.supabaseServiceRoleKey }}"
             },
             {
               "name": "Content-Type",
@@ -628,8 +681,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3840,
-        500
+        3860,
+        520
       ]
     }
   ],
@@ -682,14 +735,14 @@
       "main": [
         [
           {
-            "node": "Lookup Lead in Supabase",
+            "node": "Lookup Lead in Agency Leads",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lookup Lead in Supabase": {
+    "Lookup Lead in Agency Leads": {
       "main": [
         [
           {
@@ -715,7 +768,7 @@
       "main": [
         [
           {
-            "node": "Create New Lead in Supabase",
+            "node": "Create New Lead for Agency",
             "type": "main",
             "index": 0
           }
@@ -729,7 +782,7 @@
         ]
       ]
     },
-    "Create New Lead in Supabase": {
+    "Create New Lead for Agency": {
       "main": [
         [
           {
@@ -744,14 +797,14 @@
       "main": [
         [
           {
-            "node": "Log Inbound Customer Message",
+            "node": "Log Customer Message in Supabase",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log Inbound Customer Message": {
+    "Log Customer Message in Supabase": {
       "main": [
         [
           {
@@ -767,21 +820,21 @@
         [],
         [
           {
-            "node": "Pause Bot on Lead (Human Needed)",
+            "node": "Pause Bot (Mark Human Needed)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Fetch Bot Available Listings",
+            "node": "Fetch Agency Bot Listings",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pause Bot on Lead (Human Needed)": {
+    "Pause Bot (Mark Human Needed)": {
       "main": [
         [
           {
@@ -803,18 +856,18 @@
         ]
       ]
     },
-    "Fetch Bot Available Listings": {
+    "Fetch Agency Bot Listings": {
       "main": [
         [
           {
-            "node": "AI Real Estate Agent (OpenAI)",
+            "node": "Agency AI Real Estate Agent (OpenAI)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "AI Real Estate Agent (OpenAI)": {
+    "Agency AI Real Estate Agent (OpenAI)": {
       "main": [
         [
           {
@@ -840,14 +893,14 @@
       "main": [
         [
           {
-            "node": "Send AI Reply via WhatsApp API",
+            "node": "Send AI Reply via Agency WhatsApp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send AI Reply via WhatsApp API": {
+    "Send AI Reply via Agency WhatsApp": {
       "main": [
         [
           {
