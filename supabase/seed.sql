@@ -608,8 +608,8 @@ begin
         'done'
     ),
     (
-        v_lead_8, -- lead id
         v_agency_id,
+        v_lead_8,
         v_list_9,
         timezone('Asia/Karachi', now() - interval '4 days'),
         'cancelled'
