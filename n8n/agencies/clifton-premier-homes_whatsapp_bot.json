@@ -1,0 +1,935 @@
+{
+  "name": "Pakistan Real Estate WhatsApp Bot - Clifton Premier Homes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-clifton-premier-homes",
+        "options": {}
+      },
+      "id": "node-webhook-post",
+      "name": "WhatsApp Webhook (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "whatsapp-clifton-premier-homes-post"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp-clifton-premier-homes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-get",
+      "name": "WhatsApp Verification (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        80
+      ],
+      "webhookId": "whatsapp-clifton-premier-homes-get"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.query['hub.mode'] }}",
+              "value2": "subscribe"
+            }
+          ]
+        }
+      },
+      "id": "node-verify-check",
+      "name": "Is Meta Verification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "id": "node-respond-challenge",
+      "name": "Return Meta Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================================\n// 🏢 AGENCY ROUTING & PROFILE (Clifton Premier Homes)\n// Credentials (Supabase, OpenAI, WhatsApp) live in n8n Credential Manager\n// =====================================================================\n\nconst agencyInfo = {\n  // Agency UUID from Supabase public.agencies table\n  agencyId: \"00000000-0000-0000-0000-000000000002\",\n  \n  // Agency Profile for AI customer greetings\n  agencyName: \"Clifton Premier Homes\",\n  agentPhone: \"+92 321 8219401\",\n  primaryCity: \"Clifton & DHA Karachi\",\n  \n  // Meta Phone Number ID (from WhatsApp Business App Dashboard)\n  phoneNumberId: \"109876543210987\"\n};\n\nconst webhookData = $input.first()?.json || {};\n\nreturn [{\n  json: {\n    ...webhookData,\n    ...agencyInfo\n  }\n}];"
+      },
+      "id": "node-agency-info",
+      "name": "🏢 Agency Info & Routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst item = $input.first().json;\nconst body = item.body || item;\n\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API payload validation\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming customer message (ignore delivery receipts)\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 Pakistani standard format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from WhatsApp contact profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId: item.agencyId,\n    agencyName: item.agencyName,\n    agentPhone: item.agentPhone,\n    primaryCity: item.primaryCity,\n    phoneNumberId: item.phoneNumberId\n  }\n}];"
+      },
+      "id": "node-parse-whatsapp",
+      "name": "Parse WhatsApp Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isMessage }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "node-filter-is-message",
+      "name": "Is Real Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "leads",
+        "returnAll": false,
+        "limit": 1,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": [
+          {
+            "key": "phone",
+            "condition": "eq",
+            "val": "={{ $json.senderPhone }}"
+          },
+          {
+            "key": "agency_id",
+            "condition": "eq",
+            "val": "={{ $json.agencyId }}"
+          }
+        ]
+      },
+      "id": "node-lookup-lead",
+      "name": "Lookup Lead in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        300
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Parse WhatsApp Payload').first().json;\nconst existingLeads = $input.all().map(i => i.json);\n\nlet lead = null;\nlet isNewLead = false;\n\nif (existingLeads.length > 0 && existingLeads[0].id) {\n  lead = existingLeads[0];\n} else {\n  isNewLead = true;\n}\n\nreturn [{\n  json: {\n    ...prev,\n    lead,\n    isNewLead\n  }\n}];"
+      },
+      "id": "node-check-lead-exists",
+      "name": "Process Lead Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isNewLead }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "node-if-new-lead",
+      "name": "Is New Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "agency_id",
+              "fieldValue": "={{ $json.agencyId }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.customerName }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $json.senderPhone }}"
+            },
+            {
+              "fieldId": "label",
+              "fieldValue": "cold"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "new"
+            },
+            {
+              "fieldId": "bot_paused",
+              "fieldValue": false
+            }
+          ]
+        }
+      },
+      "id": "node-create-lead",
+      "name": "Create New Lead in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        200
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parseData = $('Parse WhatsApp Payload').first().json;\nlet lead = null;\n\n// If newly created\nconst created = $input.first()?.json;\nif (created && (created.id || (Array.isArray(created) && created[0]?.id))) {\n  lead = Array.isArray(created) ? created[0] : created;\n} else {\n  lead = $('Process Lead Status').first().json.lead;\n}\n\n// Detect human takeover triggers in English, Roman Urdu & Urdu script\nconst text = (parseData.messageText || '').toLowerCase();\nconst humanKeywords = [\n  'human',\n  'agent',\n  'call me',\n  'call karein',\n  'call karo',\n  'phone',\n  'number dein',\n  'baat karni',\n  'rabta',\n  'live person',\n  'insan',\n  'banda',\n  'owner se',\n  'کال',\n  'ایجنٹ',\n  'بات کرنی'\n];\n\nconst requestedHuman = humanKeywords.some(kw => text.includes(kw));\n\nlet botState = 'active';\nif (lead.bot_paused) {\n  botState = 'paused_already';\n} else if (requestedHuman) {\n  botState = 'requesting_human';\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    lead,\n    leadId: lead.id,\n    botState,\n    requestedHuman\n  }\n}];"
+      },
+      "id": "node-analyze-handoff",
+      "name": "Analyze Human Handoff & Bot State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "agency_id",
+              "fieldValue": "={{ $json.agencyId }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.leadId }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "in"
+            },
+            {
+              "fieldId": "sender",
+              "fieldValue": "customer"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "={{ $json.messageText }}"
+            },
+            {
+              "fieldId": "media_type",
+              "fieldValue": "text"
+            },
+            {
+              "fieldId": "delivery_status",
+              "fieldValue": "delivered"
+            }
+          ]
+        }
+      },
+      "id": "node-log-inbound-msg",
+      "name": "Log Customer Message in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        300
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $('Analyze Human Handoff & Bot State').first().json.botState }}",
+                    "value2": "paused_already"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $('Analyze Human Handoff & Bot State').first().json.botState }}",
+                    "value2": "requesting_human"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $('Analyze Human Handoff & Bot State').first().json.botState }}",
+                    "value2": "active"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "node-switch-bot-state",
+      "name": "Route Bot State",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "matchingColumn": "id",
+        "matchingValue": "={{ $('Analyze Human Handoff & Bot State').first().json.leadId }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "bot_paused",
+              "fieldValue": true
+            },
+            {
+              "fieldId": "label",
+              "fieldValue": "hot"
+            }
+          ]
+        }
+      },
+      "id": "node-pause-lead-bot",
+      "name": "Pause Bot on Lead in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2700,
+        260
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Analyze Human Handoff & Bot State').first().json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $('Analyze Human Handoff & Bot State').first().json.senderPhone.replace('+', '') }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"preview_url\": false,\n    \"body\": \"Bohat shukriya {{ $('Analyze Human Handoff & Bot State').first().json.customerName }} sb! Humne bot pause kardiya hai aur {{ $('Analyze Human Handoff & Bot State').first().json.agencyName }} ke senior consultant ko alert bhej diya hai. Hamari team jald hi aapko isi number pe call ya WhatsApp karegi. JazakAllah!\"\n  }\n}",
+        "options": {}
+      },
+      "id": "node-send-handover-wa",
+      "name": "Send Handover Notification on WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2940,
+        260
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "clifton-premier-homes-whatsapp-token",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "agency_id",
+              "fieldValue": "={{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $('Analyze Human Handoff & Bot State').first().json.leadId }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "out"
+            },
+            {
+              "fieldId": "sender",
+              "fieldValue": "bot"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "Bohat shukriya! Humne bot pause kardiya hai aur hamare senior consultant ko notify kardiya hai. Agent jald rabta karein gay."
+            },
+            {
+              "fieldId": "media_type",
+              "fieldValue": "text"
+            },
+            {
+              "fieldId": "delivery_status",
+              "fieldValue": "delivered"
+            }
+          ]
+        }
+      },
+      "id": "node-log-handover-msg",
+      "name": "Log Handover Message in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3180,
+        260
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "listings",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": [
+          {
+            "key": "agency_id",
+            "condition": "eq",
+            "val": "={{ $('Analyze Human Handoff & Bot State').first().json.agencyId }}"
+          },
+          {
+            "key": "visible_to_bot",
+            "condition": "eq",
+            "val": "true"
+          },
+          {
+            "key": "status",
+            "condition": "eq",
+            "val": "available"
+          }
+        ]
+      },
+      "id": "node-fetch-bot-listings",
+      "name": "Fetch Agency Bot Listings in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2700,
+        480
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=You are the primary WhatsApp Real Estate Consultant AI for {{ $('Analyze Human Handoff & Bot State').first().json.agencyName }} operating in {{ $('Analyze Human Handoff & Bot State').first().json.primaryCity }}. You speak warm, polite Roman Urdu and English.\n\nYOUR GOAL:\n1. Greet the customer respectfully ('Assalam o alaikum [Name] sb / madam').\n2. Answer their inquiry accurately using ONLY our agency's available property inventory provided below.\n3. Recommend 1 or 2 matching properties, highlighting Title, Location, Size (Marla/Kanal/Sq Yd), Asking Price in Lakh or Crore, and key amenities.\n4. If an Instagram video tour link is present, share it nicely so they can watch the property tour.\n5. Ask an engaging closing question (e.g., 'Would you like us to schedule a site visit this week or check other sectors?').\n6. Extract customer preferences into structured metadata.\n\nSTRICT JSON OUTPUT FORMAT:\nReturn ONLY a valid JSON object:\n{\n  \"reply_text\": \"Assalam o alaikum Tariq sb! ...\",\n  \"recommended_listing_id\": \"UUID-or-null\",\n  \"extracted_lead\": {\n    \"wants_type\": \"house\" | \"flat\" | \"plot\" | \"commercial\" | null,\n    \"wants_area\": \"DHA Phase 6\" | null,\n    \"budget_max_pkr\": 50000000 | null,\n    \"wants_size\": \"10 marla\" | null,\n    \"buy_or_rent\": \"buy\" | \"rent\" | null,\n    \"label\": \"hot\" | \"cold\"\n  }\n}\n\nMark label as 'hot' if they have a clear budget, urgent buying timeline, or requested a visit.\n\nAVAILABLE AGENCY INVENTORY:\n{{ JSON.stringify($input.all().map(i => i.json)) }}"
+            },
+            {
+              "role": "user",
+              "content": "=Customer Name: {{ $('Analyze Human Handoff & Bot State').first().json.customerName }}\nCustomer Phone: {{ $('Analyze Human Handoff & Bot State').first().json.senderPhone }}\nCustomer Inquiry: {{ $('Analyze Human Handoff & Bot State').first().json.messageText }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": {
+            "type": "json_object"
+          },
+          "temperature": 0.4
+        }
+      },
+      "id": "node-openai-chat",
+      "name": "Agency AI Real Estate Agent (OpenAI)",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        2940,
+        480
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiRaw = $input.first().json.message.content || $input.first().json.text || '{}';\nlet aiData = {};\ntry {\n  aiData = JSON.parse(aiRaw);\n} catch (e) {\n  aiData = {\n    reply_text: 'Assalam o alaikum! Shukriya rabta karne ka. Hamare pas premium options available hain. Aap ka budget aur required size kya hai?',\n    recommended_listing_id: null,\n    extracted_lead: {}\n  };\n}\n\nconst handoverData = $('Analyze Human Handoff & Bot State').first().json;\n\nreturn [{\n  json: {\n    ...handoverData,\n    aiReply: aiData.reply_text || 'Assalam o alaikum! How can we assist you with property today?',\n    recommendedListingId: aiData.recommended_listing_id || null,\n    extractedLead: aiData.extracted_lead || {}\n  }\n}];"
+      },
+      "id": "node-parse-ai-output",
+      "name": "Parse AI Output & Extract Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3180,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "matchingColumn": "id",
+        "matchingValue": "={{ $json.leadId }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "wants_type",
+              "fieldValue": "={{ $json.extractedLead.wants_type || '' }}"
+            },
+            {
+              "fieldId": "wants_area",
+              "fieldValue": "={{ $json.extractedLead.wants_area || '' }}"
+            },
+            {
+              "fieldId": "budget_max_pkr",
+              "fieldValue": "={{ $json.extractedLead.budget_max_pkr || '' }}"
+            },
+            {
+              "fieldId": "wants_size",
+              "fieldValue": "={{ $json.extractedLead.wants_size || '' }}"
+            },
+            {
+              "fieldId": "buy_or_rent",
+              "fieldValue": "={{ $json.extractedLead.buy_or_rent || 'buy' }}"
+            },
+            {
+              "fieldId": "label",
+              "fieldValue": "={{ $json.extractedLead.label || 'cold' }}"
+            }
+          ]
+        }
+      },
+      "id": "node-update-lead-ai",
+      "name": "Update Lead with Extracted Info in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3420,
+        480
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Parse AI Output & Extract Data').first().json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $('Parse AI Output & Extract Data').first().json.senderPhone.replace('+', '') }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"preview_url\": true,\n    \"body\": \"{{ $('Parse AI Output & Extract Data').first().json.aiReply.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n') }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "node-send-ai-wa",
+      "name": "Send AI Reply via Agency WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3660,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "clifton-premier-homes-whatsapp-token",
+          "name": "WhatsApp Cloud API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "agency_id",
+              "fieldValue": "={{ $('Parse AI Output & Extract Data').first().json.agencyId }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $('Parse AI Output & Extract Data').first().json.leadId }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "out"
+            },
+            {
+              "fieldId": "sender",
+              "fieldValue": "bot"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "={{ $('Parse AI Output & Extract Data').first().json.aiReply }}"
+            },
+            {
+              "fieldId": "listing_id",
+              "fieldValue": "={{ $('Parse AI Output & Extract Data').first().json.recommendedListingId || '' }}"
+            },
+            {
+              "fieldId": "media_type",
+              "fieldValue": "text"
+            },
+            {
+              "fieldId": "delivery_status",
+              "fieldValue": "delivered"
+            }
+          ]
+        }
+      },
+      "id": "node-log-ai-msg",
+      "name": "Log Outbound Bot Message in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3900,
+        480
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "clifton-premier-homes-supabase",
+          "name": "Clifton Supabase"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook (POST)": {
+      "main": [
+        [
+          {
+            "node": "🏢 Agency Info & Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏢 Agency Info & Routing": {
+      "main": [
+        [
+          {
+            "node": "Parse WhatsApp Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Verification (GET)": {
+      "main": [
+        [
+          {
+            "node": "Is Meta Verification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Meta Verification?": {
+      "main": [
+        [
+          {
+            "node": "Return Meta Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse WhatsApp Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Real Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Real Message?": {
+      "main": [
+        [
+          {
+            "node": "Lookup Lead in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Lead in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Process Lead Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Lead Status": {
+      "main": [
+        [
+          {
+            "node": "Is New Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Lead?": {
+      "main": [
+        [
+          {
+            "node": "Create New Lead in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze Human Handoff & Bot State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Lead in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Analyze Human Handoff & Bot State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Human Handoff & Bot State": {
+      "main": [
+        [
+          {
+            "node": "Log Customer Message in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Customer Message in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Route Bot State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Bot State": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Pause Bot on Lead in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Agency Bot Listings in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause Bot on Lead in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Send Handover Notification on WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Handover Notification on WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Handover Message in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Agency Bot Listings in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Agency AI Real Estate Agent (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agency AI Real Estate Agent (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output & Extract Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output & Extract Data": {
+      "main": [
+        [
+          {
+            "node": "Update Lead with Extracted Info in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead with Extracted Info in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Send AI Reply via Agency WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send AI Reply via Agency WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Outbound Bot Message in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
