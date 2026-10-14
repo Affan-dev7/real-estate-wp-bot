@@ -3,59 +3,6 @@
   "nodes": [
     {
       "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "agencyId",
-              "value": "00000000-0000-0000-0000-000000000001"
-            },
-            {
-              "name": "agencyName",
-              "value": "Al-Raziq Estate & Builders"
-            },
-            {
-              "name": "agentPhone",
-              "value": "+92 300 8251940"
-            },
-            {
-              "name": "primaryCity",
-              "value": "Karachi & Lahore"
-            },
-            {
-              "name": "supabaseUrl",
-              "value": "https://YOUR_PROJECT_REF.supabase.co"
-            },
-            {
-              "name": "supabaseServiceRoleKey",
-              "value": "YOUR_SUPABASE_SERVICE_ROLE_KEY"
-            },
-            {
-              "name": "whatsappPhoneNumberId",
-              "value": "YOUR_WHATSAPP_PHONE_NUMBER_ID"
-            },
-            {
-              "name": "whatsappAccessToken",
-              "value": "YOUR_WHATSAPP_PERMANENT_ACCESS_TOKEN"
-            },
-            {
-              "name": "webhookVerifyToken",
-              "value": "agency_verify_token_123"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "node-agency-config",
-      "name": "⚙️ Agency & Bot Settings",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        200,
-        200
-      ]
-    },
-    {
-      "parameters": {
         "httpMethod": "POST",
         "path": "whatsapp-agency-1",
         "options": {}
@@ -65,10 +12,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        420,
-        320
+        220,
+        300
       ],
-      "webhookId": "whatsapp-real-estate-post"
+      "webhookId": "whatsapp-agency-post"
     },
     {
       "parameters": {
@@ -82,10 +29,23 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        420,
+        220,
         80
       ],
-      "webhookId": "whatsapp-real-estate-get"
+      "webhookId": "whatsapp-agency-get"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =====================================================================\n// ⚙️ CONFIGURE THIS AGENCY'S CREDENTIALS & DETAILS BELOW:\n// (Double-click this node to edit your agency settings)\n// =====================================================================\n\nconst agencyConfig = {\n  // 1. Agency ID (from Supabase public.agencies table)\n  agencyId: \"00000000-0000-0000-0000-000000000001\",\n\n  // 2. Agency Name & Contact (used by AI in customer conversations)\n  agencyName: \"Al-Raziq Estate & Builders\",\n  agentPhone: \"+92 300 8251940\",\n  primaryCity: \"Karachi & Lahore\",\n\n  // 3. Supabase Credentials\n  supabaseUrl: \"https://YOUR_PROJECT_REF.supabase.co\",\n  supabaseServiceRoleKey: \"YOUR_SUPABASE_SERVICE_ROLE_KEY\",\n\n  // 4. Meta WhatsApp Cloud API Credentials\n  whatsappPhoneNumberId: \"YOUR_WHATSAPP_PHONE_NUMBER_ID\",\n  whatsappAccessToken: \"YOUR_WHATSAPP_PERMANENT_ACCESS_TOKEN\",\n\n  // 5. Secret verification token (entered in Meta Developers Webhook settings)\n  webhookVerifyToken: \"agency_verify_token_123\"\n};\n\n// Attach agency configuration directly to the incoming webhook payload\nconst webhookData = $input.first()?.json || {};\n\nreturn [{\n  json: {\n    ...webhookData,\n    agencyConfig\n  }\n}];"
+      },
+      "id": "node-agency-config",
+      "name": "⚙️ Agency & Bot Settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -103,7 +63,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        640,
+        460,
         80
       ]
     },
@@ -118,21 +78,21 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        860,
+        700,
         80
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst body = $input.first().json.body || $input.first().json;\nconst config = $('⚙️ Agency & Bot Settings').first().json;\n\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API payload validation\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming message rather than a delivery receipt\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 Pakistani standard format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from WhatsApp contact profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId: config.agencyId,\n    agencyName: config.agencyName,\n    agentPhone: config.agentPhone,\n    primaryCity: config.primaryCity,\n    supabaseUrl: config.supabaseUrl,\n    supabaseServiceRoleKey: config.supabaseServiceRoleKey,\n    whatsappPhoneNumberId: config.whatsappPhoneNumberId,\n    whatsappAccessToken: config.whatsappAccessToken\n  }\n}];"
+        "jsCode": "// Extract incoming message details from Meta WhatsApp Cloud API payload\nconst item = $input.first().json;\nconst body = item.body || item;\nconst config = item.agencyConfig || {};\n\nlet senderPhone = '';\nlet customerName = 'Customer';\nlet messageText = '';\nlet messageId = '';\nlet messageTimestamp = new Date().toISOString();\nlet isMessage = false;\n\n// WhatsApp Cloud API payload structure validation\nif (body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]) {\n  const value = body.entry[0].changes[0].value;\n  \n  // Check if it's an incoming customer message (ignore delivery status receipts)\n  if (value.messages && value.messages[0]) {\n    isMessage = true;\n    const msg = value.messages[0];\n    messageId = msg.id || '';\n    \n    // Normalize phone number to +92 Pakistani standard format\n    let rawPhone = msg.from || '';\n    if (rawPhone.startsWith('92')) {\n      senderPhone = '+' + rawPhone;\n    } else if (rawPhone.startsWith('03')) {\n      senderPhone = '+92' + rawPhone.substring(1);\n    } else if (rawPhone.startsWith('+')) {\n      senderPhone = rawPhone;\n    } else {\n      senderPhone = '+92' + rawPhone;\n    }\n    \n    // Customer name from WhatsApp contact profile\n    if (value.contacts && value.contacts[0] && value.contacts[0].profile) {\n      customerName = value.contacts[0].profile.name || 'Customer';\n    }\n    \n    // Message text body\n    if (msg.type === 'text' && msg.text) {\n      messageText = msg.text.body || '';\n    } else if (msg.type === 'interactive' && msg.interactive) {\n      messageText = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || '';\n    } else {\n      messageText = `[Customer sent ${msg.type || 'media'}]`;\n    }\n    \n    if (msg.timestamp) {\n      messageTimestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();\n    }\n  }\n}\n\nreturn [{\n  json: {\n    isMessage,\n    senderPhone,\n    customerName,\n    messageText,\n    messageId,\n    messageTimestamp,\n    agencyId: config.agencyId,\n    agencyName: config.agencyName,\n    agentPhone: config.agentPhone,\n    primaryCity: config.primaryCity,\n    supabaseUrl: config.supabaseUrl,\n    supabaseServiceRoleKey: config.supabaseServiceRoleKey,\n    whatsappPhoneNumberId: config.whatsappPhoneNumberId,\n    whatsappAccessToken: config.whatsappAccessToken\n  }\n}];"
       },
       "id": "node-parse-whatsapp",
       "name": "Parse WhatsApp Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        640,
-        320
+        700,
+        300
       ]
     },
     {
@@ -151,8 +111,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        860,
-        320
+        920,
+        300
       ]
     },
     {
@@ -196,8 +156,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1080,
-        320
+        1140,
+        300
       ]
     },
     {
@@ -209,8 +169,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1300,
-        320
+        1360,
+        300
       ]
     },
     {
@@ -229,8 +189,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1520,
-        320
+        1580,
+        300
       ]
     },
     {
@@ -268,8 +228,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1740,
-        220
+        1800,
+        200
       ]
     },
     {
@@ -281,8 +241,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1960,
-        320
+        2020,
+        300
       ]
     },
     {
@@ -316,8 +276,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2180,
-        320
+        2240,
+        300
       ]
     },
     {
@@ -362,8 +322,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        2400,
-        320
+        2460,
+        300
       ]
     },
     {
@@ -406,8 +366,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2660,
-        300
+        2700,
+        260
       ]
     },
     {
@@ -437,8 +397,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2900,
-        300
+        2940,
+        260
       ]
     },
     {
@@ -472,8 +432,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3140,
-        300
+        3180,
+        260
       ]
     },
     {
@@ -521,8 +481,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2660,
-        520
+        2700,
+        480
       ]
     },
     {
@@ -552,8 +512,8 @@
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1.4,
       "position": [
-        2900,
-        520
+        2940,
+        480
       ],
       "credentials": {
         "openAiApi": {
@@ -571,8 +531,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3140,
-        520
+        3180,
+        480
       ]
     },
     {
@@ -615,8 +575,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3380,
-        520
+        3420,
+        480
       ]
     },
     {
@@ -646,8 +606,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3620,
-        520
+        3660,
+        480
       ]
     },
     {
@@ -681,13 +641,24 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3860,
-        520
+        3900,
+        480
       ]
     }
   ],
   "connections": {
     "WhatsApp Webhook (POST)": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Agency & Bot Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Agency & Bot Settings": {
       "main": [
         [
           {
