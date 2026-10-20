@@ -36,36 +36,18 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.query['hub.mode'] }}",
-              "value2": "subscribe"
-            }
-          ]
-        }
-      },
-      "id": "node-verify-check",
-      "name": "Is Meta Verification?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        460,
-        80
-      ]
-    },
-    {
-      "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json.query['hub.challenge'] }}",
-        "options": {}
+        "responseBody": "={{ $json.query[\"hub.challenge\"] || $json.query.hub_challenge }}",
+        "options": {
+          "responseCode": 200
+        }
       },
       "id": "node-respond-challenge",
       "name": "Return Meta Challenge",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        700,
+        500,
         80
       ]
     },
@@ -505,6 +487,18 @@
       "parameters": {
         "model": "gpt-4o-mini",
         "messages": {
+          "messageValues": [
+            {
+              "type": "text",
+              "role": "system",
+              "prompt": "=You are the primary WhatsApp Real Estate Consultant AI for {{ $('Analyze Human Handoff & Bot State').first().json.agencyName }} operating in {{ $('Analyze Human Handoff & Bot State').first().json.primaryCity }}. You speak warm, polite Roman Urdu and English.\n\nYOUR GOAL:\n1. Greet the customer respectfully ('Assalam o alaikum [Name] sb / madam').\n2. Answer their inquiry accurately using ONLY our agency's available property inventory provided below.\n3. Recommend 1 or 2 matching properties, highlighting Title, Location, Size (Marla/Kanal/Sq Yd), Asking Price in Lakh or Crore, and key amenities.\n4. If an Instagram video tour link is present, share it nicely so they can watch the property tour.\n5. Ask an engaging closing question (e.g., 'Would you like us to schedule a site visit this week or check other sectors?').\n6. Extract customer preferences into structured metadata.\n\nSTRICT JSON OUTPUT FORMAT:\nReturn ONLY a valid JSON object:\n{\n  \"reply_text\": \"Assalam o alaikum Tariq sb! ...\",\n  \"recommended_listing_id\": \"UUID-or-null\",\n  \"extracted_lead\": {\n    \"wants_type\": \"house\" | \"flat\" | \"plot\" | \"commercial\" | null,\n    \"wants_area\": \"DHA Phase 6\" | null,\n    \"budget_max_pkr\": 50000000 | null,\n    \"wants_size\": \"10 marla\" | null,\n    \"buy_or_rent\": \"buy\" | \"rent\" | null,\n    \"label\": \"hot\" | \"cold\"\n  }\n}\n\nMark label as 'hot' if they have a clear budget, urgent buying timeline, or requested a visit.\n\nAVAILABLE AGENCY INVENTORY:\n{{ JSON.stringify($input.all().map(i => i.json)) }}"
+            },
+            {
+              "type": "text",
+              "role": "user",
+              "prompt": "=Customer Name: {{ $('Analyze Human Handoff & Bot State').first().json.customerName }}\nCustomer Phone: {{ $('Analyze Human Handoff & Bot State').first().json.senderPhone }}\nCustomer Inquiry: {{ $('Analyze Human Handoff & Bot State').first().json.messageText }}"
+            }
+          ],
           "values": [
             {
               "role": "system",
@@ -716,17 +710,6 @@
       ]
     },
     "WhatsApp Verification (GET)": {
-      "main": [
-        [
-          {
-            "node": "Is Meta Verification?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Meta Verification?": {
       "main": [
         [
           {
